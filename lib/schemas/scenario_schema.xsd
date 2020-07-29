@@ -6,6 +6,13 @@
   <xs:element name="scenario">
     <xs:complexType>
       <xs:sequence>
+        <!-- TODO: These are optional for now, should these be set to minOccurs 1 to make mandatory? -->
+        <xs:element name="name" type="xs:string" minOccurs="0" maxOccurs="1"/>
+        <xs:element name="author" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:element name="description" type="xs:string" minOccurs="0" maxOccurs="1"/>
+        <xs:element name="type" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:element name="difficulty" type="xs:string" minOccurs="0" maxOccurs="1"/>
+
         <xs:element name='system' type='SystemType' minOccurs='1' maxOccurs='unbounded' />
       </xs:sequence>
     </xs:complexType>
@@ -63,6 +70,7 @@
     <xs:attribute name='distro' type='xs:string'/>
     <xs:attribute name='url' type='xs:string'/>
     <xs:attribute name='vagrantbase' type='xs:string'/>
+    <xs:attribute name='ovirt_template' type='xs:string'/>
     <xs:attribute name='reference' type='xs:string'/>
     <xs:attribute name='software_license' type='xs:string'/>
   </xs:complexType>
@@ -80,6 +88,8 @@
     <xs:attribute name="description" type="xs:string"/>
 
     <xs:attribute name="type" type="xs:string"/>
+    <xs:attribute name="challenge_type" type="xs:string"/>
+    <xs:attribute name="challenge_subtype" type="xs:string"/>
     <xs:attribute name="privilege" type="xs:string"/>
     <xs:attribute name="access" type="xs:string"/>
     <xs:attribute name="platform" type="xs:string"/>
@@ -117,6 +127,7 @@
     <xs:attribute name="description" type="xs:string"/>
     <xs:attribute name="type" type="xs:string"/>
     <xs:attribute name="platform" type="xs:string"/>
+    <xs:attribute name="difficulty" type="xs:string"/>
 
     <xs:attribute name="read_fact" type="xs:string"/>
 
@@ -126,6 +137,9 @@
   </xs:complexType>
 
   <xs:complexType name="NetworkType">
+    <xs:sequence>
+      <xs:element name="input" type="InputElements" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
     <xs:attribute name="module_path" type="xs:string"/>
 
     <xs:attribute name="name" type="xs:string"/>

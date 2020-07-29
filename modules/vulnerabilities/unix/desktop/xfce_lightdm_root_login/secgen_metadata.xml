@@ -10,8 +10,13 @@
 
   <type>desktop_environment</type>
   <privilege>root_rwx</privilege>
-  <access>local</access>
+  <access>physical</access>
   <platform>linux</platform>
+
+  <conflict>
+    <!-- This module is based on lightdm; Stretch base has sddm pre-installed -->
+    <name>Debian 9 Stretch Desktop KDE</name>
+  </conflict>
 
   <requires>
     <type>update</type>

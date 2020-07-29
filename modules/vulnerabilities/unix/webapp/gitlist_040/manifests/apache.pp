@@ -1,24 +1,25 @@
 class gitlist_040::apache {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
   $port = $secgen_parameters['port'][0]
   $docroot = '/var/www/gitlist'
 
-  package { 'php5':
-    ensure => installed,
-  }
-  #
-  # include ::apache::mod::rewrite
-  # include ::apache::mod::php
-
   class { '::apache':
     default_vhost => false,
-    default_mods => ['rewrite', 'php'],
+    default_mods => ['rewrite'], # php5 via separate module
     overwrite_ports => false,
+    mpm_module => 'prefork'
   }
 
   ::apache::vhost { 'www-gitlist':
     port    => $port,
     docroot => $docroot,
+    notify => Tidy['gl remove default site']
   }
+
+  ensure_resource('tidy','gl remove default site', {'path'=>'/etc/apache2/sites-enabled/000-default.conf'})
+  #
+  #
+  # exec { 'disable php7':
+  #   command => '/usr/sbin/a2dismod php7.0',
+  # }
 }

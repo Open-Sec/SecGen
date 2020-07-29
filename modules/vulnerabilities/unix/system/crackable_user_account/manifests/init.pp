@@ -1,6 +1,5 @@
 class crackable_user_account::init {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
 
   $account = parsejson($secgen_parameters['accounts'][0])
   $username = $account['username']
@@ -8,6 +7,7 @@ class crackable_user_account::init {
   ::parameterised_accounts::account { "crackable_user_account_$username":
     username        => $username,
     password        => $account['password'],
+    groups          => [],
     super_user      => str2bool($account['super_user']),
     strings_to_leak => $secgen_parameters['strings_to_leak'],
     leaked_filenames => $account['leaked_filenames']

@@ -41,6 +41,7 @@
             <xs:restriction base="xs:string">
               <xs:enumeration value="server"/>
               <xs:enumeration value="desktop"/>
+              <xs:enumeration value="attack"/>
               <xs:enumeration value="cli"/>
             </xs:restriction>
           </xs:simpleType>
@@ -49,6 +50,8 @@
         <xs:element name="platform" type="platformOptions" minOccurs="1" maxOccurs="unbounded"/>
         <xs:element name="distro" type="xs:string" minOccurs="1" maxOccurs="1"/>
         <xs:element name="url" type="xs:string" minOccurs="1" maxOccurs="1"/>
+        <xs:element name="esxi_url" type="xs:string" minOccurs="0" maxOccurs="1"/>
+        <xs:element name="ovirt_template" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
 
         <xs:element name="packerfile_path" type="xs:string" minOccurs="0" maxOccurs="1"/>
         <xs:element name="product_key" type="xs:string" minOccurs="0" maxOccurs="1"/>

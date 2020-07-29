@@ -1,6 +1,10 @@
 class mail::init {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+
+  package { 'mailutils':
+    ensure => installed,
+  }
+
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
 
   $mail = $secgen_parameters['mail']
 

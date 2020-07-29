@@ -12,6 +12,7 @@
   <privilege>info_leak</privilege>
   <access>remote</access>
   <platform>linux</platform>
+  <difficulty>low</difficulty>
 
   <read_fact>strings_to_leak</read_fact>
   <read_fact>images_to_leak</read_fact>
@@ -55,7 +56,6 @@
     <!--</encoder>-->
   <!--</default_input>-->
   <!--optional vulnerability details-->
-  <difficulty>low</difficulty>
   <!--<cve></cve>-->
   <cvss_base_score>4.3</cvss_base_score>
   <cvss_vector>AV:N/AC:M/Au:N/C:P/I:N/A:N</cvss_vector>
@@ -63,11 +63,7 @@
   <software_name>nfsd</software_name>
   <software_license>GPLv2</software_license>
 
-  <!--optional breadcrumb (info that is leaked and required to exploit)-->
-  <!--<breadcrumb></breadcrumb>-->
-
   <!--optional hints-->
-  <!--<msf_module></msf_module>-->
   <hint>A filesharing misconfiguration</hint>
   <solution>NFS can be mounted to access files</solution>
 

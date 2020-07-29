@@ -1,6 +1,5 @@
 class moinmoin_195::config {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
   $images_to_leak = $secgen_parameters['images_to_leak']
   $raw_org = $secgen_parameters['organisation']
 
@@ -53,6 +52,7 @@ class moinmoin_195::config {
     storage_directory => "/usr/local/share/moin/data/pages/$default_page/attachments",
     images_to_leak => $images_to_leak,
     leaked_from => "moinmoin_195",
+    owner => "www-data"
   }
 
 
@@ -63,4 +63,6 @@ class moinmoin_195::config {
     /bin/chmod -R o-rwx /usr/local/share/moin',
     notify => Service['apache2'],
   }
+
+  ensure_resource('tidy','moinmoin remove default site', {'path'=>'/etc/apache2/sites-enabled/000-default.conf'})
 }

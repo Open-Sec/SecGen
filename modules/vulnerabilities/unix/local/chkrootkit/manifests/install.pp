@@ -1,7 +1,6 @@
 class chkrootkit::install {
   Exec { path => ['/bin', '/usr/bin', '/usr/local/bin', '/sbin', '/usr/sbin'] }
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
   $leaked_filenames = $secgen_parameters['leaked_filenames']
   $strings_to_leak = $secgen_parameters['strings_to_leak']
   $archive = 'chkrootkit-0.49.tar.gz'
@@ -16,9 +15,13 @@ class chkrootkit::install {
     command => "tar -xzf $archive",
   }
 
+  ensure_packages('build-essential')
+  ensure_packages('gcc-multilib')
+
   exec { 'make-chkrootkit':
     cwd => '/usr/local/chkrootkit-0.49/',
     command => 'make sense',
+    require => Package['build-essential', 'gcc-multilib'],
   }
 
   file { '/usr/sbin/chkrootkit':
@@ -37,5 +40,6 @@ class chkrootkit::install {
     leaked_filenames => $leaked_filenames,
     strings_to_leak => $strings_to_leak,
     leaked_from => "chkrootkit_vuln",
+    mode => '0600'
   }
 }

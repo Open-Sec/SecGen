@@ -1,6 +1,5 @@
 class unrealirc_3281_backdoor::configure {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_parameters = parsejson($json_inputs)
+  $secgen_parameters = secgen_functions::get_parameters($::base64_inputs_file)
   $port = $secgen_parameters['port'][0]
   $strings_to_leak = $secgen_parameters['strings_to_leak']
   $leaked_filenames = $secgen_parameters['leaked_filenames']
@@ -33,7 +32,23 @@ class unrealirc_3281_backdoor::configure {
   }
 
   exec { 'update_unreal_3281_port':
-    command => "/bin/echo 'listen *:$port;' > /var/lib/unreal/config/listen_default_6667.conf; service unreal restart",
+    command => "/bin/echo 'listen *:$port;' > /var/lib/unreal/config/listen_default_6667.conf",
+  }
+
+  case $operatingsystemrelease {
+    /^9.*/: { # do 9.x stretch stuff
+      exec { 'restart_unreal_3281_service':
+        command => 'systemctl daemon-reload; systemctl restart unreal',
+        require => Exec['update_unreal_3281_port'],
+      }
+
+    }
+    /^7.*/: { #do 7.x wheezy stuff
+      exec { 'restart_unreal_3281_service':
+        command => 'service unreal restart',
+        require => Exec['update_unreal_3281_port'],
+      }
+    }
   }
 
   # Update message of the day w/ param

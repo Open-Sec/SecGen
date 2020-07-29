@@ -13,14 +13,13 @@
   <access>remote</access>
   <platform>linux</platform>
 
+  <challenge_type>pwn</challenge_type>
+  <challenge_subtype>others</challenge_subtype>
+
   <read_fact>strings_to_leak</read_fact>
   <read_fact>root_password</read_fact>
   <read_fact>leaked_filenames</read_fact>
 
-
-  <default_input into="strings_to_leak">
-    <generator type="flag_generator"/>
-  </default_input>
 
   <default_input into="root_password">
     <generator module_path=".*weak_password.*"/>
@@ -36,6 +35,13 @@
   <solution>Use a ssh bruteforce/dictionary cracker, connect with ssh root@victim-IP-address
   </solution>
 
+  <!--<attack>-->
+    <!--<required_attack_software>sshpass</required_attack_software>-->
+    <!--<command>sshpass -p {{root_password}} ssh -oStrictHostKeyChecking=no root@{{IP_address}}</command>-->
+  <!--</attack>-->
   <!--<attack_command>sshpass -p {{root_password}} ssh -oStrictHostKeyChecking=no root@{{IP_address}}</attack_command>-->
 
+  <requires>
+    <type>update</type>
+  </requires>
 </vulnerability>

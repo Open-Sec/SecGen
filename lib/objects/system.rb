@@ -1,5 +1,6 @@
 require 'json'
 require 'base64'
+require 'duplicate'
 
 class System
 
@@ -8,6 +9,12 @@ class System
   attr_accessor :module_selectors # (filters)
   attr_accessor :module_selections # (after resolution)
   attr_accessor :num_actioned_module_conflicts
+
+  # Attributes for resetting retry loop
+  attr_accessor :available_mods #(command line options hash)
+  attr_accessor :original_datastores #(command line options hash)
+  attr_accessor :original_module_selectors #(command line options hash)
+  attr_accessor :original_available_modules #(command line options hash)
 
   # Initalizes System object
   # @param [Object] name of the system
@@ -23,17 +30,25 @@ class System
 
   # selects from the available modules, based on the selection filters that have been specified
   # @param [Object] available_modules all available modules (vulnerabilities, services, bases)
+  # @param [Object] options command line options hash
   # @return [Object] the list of selected modules
-  def resolve_module_selection(available_modules)
+  def resolve_module_selection(available_modules, options)
     retry_count = 0
-    begin
 
+    # duplicate original data and parameters for retries
+    self.available_mods = duplicate(available_modules)
+    self.original_datastores = duplicate($datastore)
+    self.original_module_selectors = duplicate(module_selectors)
+    self.original_available_modules = duplicate(available_mods)
+
+    begin
       selected_modules = []
       self.num_actioned_module_conflicts = 0
+      replace_datastore_ips(options)
 
       # for each module specified in the scenario
       module_selectors.each do |module_filter|
-        selected_modules += select_modules(module_filter.module_type, module_filter.attributes, available_modules, selected_modules, module_filter.unique_id, module_filter.write_output_variable, module_filter.write_to_module_with_id, module_filter.received_inputs, module_filter.default_inputs_literals, module_filter.write_to_datastore, module_filter.received_datastores, module_filter.write_module_path_to_datastore)
+        selected_modules += select_modules(module_filter.module_type, module_filter.attributes, available_mods, selected_modules, module_filter.unique_id, module_filter.write_output_variable, module_filter.write_to_module_with_id, module_filter.received_inputs, module_filter.default_inputs_literals, module_filter.write_to_datastore, module_filter.received_datastores, module_filter.write_module_path_to_datastore)
       end
       selected_modules
 
@@ -47,21 +62,77 @@ class System
       else
         Print.err 'No conflicts, but failed to resolve scenario -- this is a sign there is something wrong in the config (scenario / modules)'
         Print.err 'Please review the scenario -- something is wrong.'
-        exit
+        exit 1
       end
       if retry_count < RETRIES_LIMIT
         Print.err "Re-attempting to resolve scenario (##{retry_count + 1})..."
         sleep 1
         retry_count += 1
+        # reset module_filters recieved inputs
+        # We need a way to distinguish between the received inputs from values vs from generators
+        self.module_selectors = duplicate(self.original_module_selectors)
+        self.available_mods = duplicate(self.original_available_modules)
         # reset globals
-        $datastore = {}
+        $datastore = duplicate(self.original_datastores)
         $datastore_iterators = {}
         retry
       else
         Print.err "Tried re-randomising #{RETRIES_LIMIT} times. Still no joy."
         Print.err 'Please review the scenario -- something is wrong.'
-        exit
+        exit 1
       end
+    end
+  end
+
+  def replace_datastore_ips(options)
+    begin
+      if options[:ip_ranges] and $datastore['IP_addresses'] and !$datastore['replaced_ranges']
+        unused_opts_ranges = duplicate(options[:ip_ranges])
+        option_range_map = {} # k = ds_range, v = opts_range
+        new_ip_addresses = []
+
+        # Iterate over the DS IPs
+        $datastore['IP_addresses'].each do |ds_ip_address|
+          # Split the IP into ['X.X.X', 'Y']
+          split_ip = ds_ip_address.split('.')
+          ds_ip_array = [split_ip[0..2].join('.'), split_ip[3]]
+          ds_range = ds_ip_array[0] + '.0'
+          # Check if we have encountered first 3 octets before i.e. look in option_range_map for key(ds_range)
+          if option_range_map.has_key? ds_range
+            # if we have, grab that value (opts_range)
+            opts_range = option_range_map[ds_range]
+            # replace first 3 in ds_ip with first 3 in opts_range
+            split_opts_range = opts_range.split('.')
+            split_opts_range[3] = ds_ip_array[1]
+            new_ds_ip = split_opts_range.join('.')
+            # save in $datastore['IP_addresses']
+            new_ip_addresses << new_ds_ip
+          else #(if we haven't seen the first 3 octets before)
+            # grab the first range that we haven't used yet from unused_opts_ranges with .shift (also removes the range)
+            opts_range = unused_opts_ranges.shift
+            # store the range mapping in option_range_map (ds_range => opts_range)
+            option_range_map[ds_range] = opts_range
+            # split the opts_range and replace last octet with last octet of ds_ip_address
+            split_opts_range = opts_range.split('.')
+            split_opts_range[3] = ds_ip_array[1]
+            new_ds_ip = split_opts_range.join('.')
+            # save in $datastore['IP_addresses']
+            new_ip_addresses << new_ds_ip
+          end
+        end
+        $datastore['IP_addresses'] = new_ip_addresses
+        $datastore['replaced_ranges'] = true
+      end
+    rescue NoMethodError
+      required_ranges = []
+      $datastore['IP_addresses'].each { |ip_address|
+        split_range = ip_address.split('.')
+        split_range[3] = 0
+        required_ranges << split_range.join('.')
+      }
+      required_ranges.uniq!
+      Print.err("Fatal: Not enough ranges were provided with --network-ranges. Provided: #{options[:ip_ranges].size} Required: #{required_ranges.uniq.size}")
+      exit 1
     end
   end
 
@@ -71,7 +142,7 @@ class System
   def select_modules(module_type, required_attributes, available_modules, previously_selected_modules, unique_id, write_outputs_to, write_to_module_with_id, received_inputs, default_inputs_literals, write_to_datastore, received_datastores, write_module_path_to_datastore)
     default_modules_to_add = []
 
-    search_list = available_modules.clone
+    search_list = duplicate(available_modules)
     # shuffle order of available vulnerabilities
     search_list.shuffle!
 
@@ -109,7 +180,7 @@ class System
       Print.err 'Could not find a matching module. Please check the scenario specification'
     else
       # use from the top of the randomised list
-      selected = search_list[0].clone
+      selected = duplicate(search_list[0])
       Print.verbose "Selecting module: #{selected.printable_name}"
 
       # propagate module relationships established when the filter was created
@@ -130,44 +201,49 @@ class System
       end
 
       # feed in input from any received datastores
-      if selected.received_datastores != {}
+      if selected.received_datastores != {} and $datastore != {}
         Print.verbose "Receiving datastores: #{selected.received_datastores}"
         selected.received_datastores.each do |input_into, datastore_list|
           datastore_list.each do |datastore_variablename_and_access_type|
             datastore_access = datastore_variablename_and_access_type['access']
             datastore_variablename = datastore_variablename_and_access_type['variablename']
             datastore_retrieved = []
-            if datastore_access == 'first'
-              datastore_retrieved = [$datastore[datastore_variablename].first]
-            elsif datastore_access == 'next'
-              last_accessed = $datastore_iterators[datastore_variablename]
-              # first use? start at beginning
-              if last_accessed == nil
-                index_to_access = 0
+            begin
+              if datastore_access == 'first'
+                datastore_retrieved = [$datastore[datastore_variablename].first]
+              elsif datastore_access == 'next'
+                last_accessed = $datastore_iterators[datastore_variablename]
+                # first use? start at beginning
+                if last_accessed == nil
+                  index_to_access = 0
+                else
+                  index_to_access = last_accessed + 1
+                end
+                $datastore_iterators[datastore_variablename] = index_to_access
+                datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
+              elsif datastore_access == 'previous'
+                last_accessed = $datastore_iterators[datastore_variablename]
+                # first use? start at end
+                if last_accessed == nil
+                  index_to_access = $datastore[datastore_variablename].size - 1
+                else
+                  index_to_access = last_accessed - 1
+                end
+                $datastore_iterators[datastore_variablename] = index_to_access
+                datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
+              elsif datastore_access.to_s == datastore_access.to_i.to_s
+                # Test for a valid element key (integer)
+                index_to_access = datastore_access.to_i
+                $datastore_iterators[datastore_variablename] = index_to_access
+                datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
+              elsif datastore_access == "all"
+                datastore_retrieved = $datastore[datastore_variablename]
               else
-                index_to_access = last_accessed + 1
+                Print.err "Error: invalid access value (#{datastore_access})"
+                raise 'failed'
               end
-              $datastore_iterators[datastore_variablename] = index_to_access
-              datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
-            elsif datastore_access == 'previous'
-              last_accessed = $datastore_iterators[datastore_variablename]
-              # first use? start at end
-              if last_accessed == nil
-                index_to_access = $datastore[datastore_variablename].size - 1
-              else
-                index_to_access = last_accessed - 1
-              end
-              $datastore_iterators[datastore_variablename] = index_to_access
-              datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
-            elsif datastore_access.to_s == datastore_access.to_i.to_s
-              # Test for a valid element key (integer)
-              index_to_access = datastore_access.to_i
-              $datastore_iterators[datastore_variablename] = index_to_access
-              datastore_retrieved = [$datastore[datastore_variablename][index_to_access]]
-            elsif datastore_access == "all"
-              datastore_retrieved = $datastore[datastore_variablename]
-            else
-              Print.err "Error: invalid access value (#{datastore_access})"
+            rescue NoMethodError, SyntaxError => err
+              Print.err "Error accessing element (#{datastore_access}) from datastore (#{datastore_variablename}): #{err}"
               raise 'failed'
             end
             if datastore_retrieved && datastore_retrieved != [nil]
@@ -235,21 +311,32 @@ class System
       if selected.local_calc_file
         Print.verbose 'Module includes local calculation of output. Processing...'
         # build arguments
-        args_string = '--b64 ' # Sets the flag for decoding base64
+        args_string = "--b64 " # Sets the flag for decoding base64
         selected.received_inputs.each do |input_key, input_values|
           puts input_values.inspect
           input_values.each do |input_element|
             if input_key == ''
               Print.warn "Warning: output values not directed to module input"
             else
-              args_string += "'--#{input_key}=#{Base64.strict_encode64(input_element)}' "
+              args_string += "--#{input_key}=#{Base64.strict_encode64(input_element)} "
             end
           end
         end
         # execute calculation script and format output to an array of Base64 strings
-        outputs = `ruby #{selected.local_calc_file} #{args_string}`.chomp
+        Print.verbose "Running: ruby #{selected.local_calc_file} #{args_string[0..200]} ..."
+        command = "bundle exec ruby #{selected.local_calc_file}"
+        stdout, stderr, status = Open3.capture3(command, :stdin_data => args_string)
+        puts stderr
+        outputs = stdout.chomp
+
+        # stop if any generators/encoders fail to execute
+        unless status == 0
+          Print.err "Module failed to run (#{command})"
+          # TODO: this works, but subsequent attempts at resolving the scenario always fail ("Error can't add no data...")
+          raise 'failed'
+        end
         output_array = outputs.split("\n")
-        selected.output = output_array.map { |o| Base64.strict_decode64 o }
+        selected.output = output_array.map { |o| (Base64.strict_decode64 o).force_encoding('UTF-8') }
       end
 
       # store the output of the module into a datastore, if specified
@@ -317,7 +404,7 @@ class System
             if /^.*defaultinput/ =~ def_unique_id
               def_unique_id = def_unique_id.gsub(/^.*defaultinput/, selected.unique_id)
             end
-            
+
             default_modules_to_add.concat select_modules(module_to_add.module_type, module_to_add.attributes, available_modules, previously_selected_modules + default_modules_to_add, def_unique_id, module_to_add.write_output_variable, def_write_to, module_to_add.received_inputs, module_to_add.default_inputs_literals, module_to_add.write_to_datastore, module_to_add.received_datastores, module_to_add.write_module_path_to_datastore)
           end
         end

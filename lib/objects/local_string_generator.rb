@@ -30,6 +30,21 @@ class StringGenerator
 
   def read_arguments
     # Get command line arguments
+    Print.local 'Reading args from STDIN'
+    if ARGV.size == 0
+      begin
+        args_array = []
+        ARGF.each do |arg|
+          arg.strip.split(' ').each do |split|
+            args_array << split
+          end
+        end
+        ARGV.unshift(*args_array)
+      rescue
+        # Do nothing...
+      end
+    end
+
     opts = get_options
 
     # process option arguments
@@ -87,8 +102,27 @@ class StringGenerator
 
     Print.local_verbose "Generating..."
     generate
-    Print.local_verbose "Generated: #{self.outputs.to_s}"
-    puts has_base64_inputs ? base64_encode_outputs : self.outputs
+
+    # print the first 1000 chars to screen
+    output = self.outputs.to_s
+    length = output.length
+    if length < 1000
+      Print.local_verbose "Generated: #{output}..."
+    else
+      Print.local_verbose "Generated: #{output.to_s[0..1000]}..."
+      Print.local_verbose "(Displaying 1000/#{length} length output)"
+    end
+
+    enforce_utf8(self.outputs)
+    print_outputs if has_base64_inputs
+  end
+
+  def enforce_utf8(values)
+    values.map { |o| o.force_encoding('UTF-8') }
+  end
+
+  def print_outputs
+    puts base64_encode_outputs
   end
 
   def base64_encode_outputs

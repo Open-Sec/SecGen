@@ -1,6 +1,5 @@
 class cleanup::init {
-  $json_inputs = base64('decode', $::base64_inputs)
-  $secgen_params = parsejson($json_inputs)
+  $secgen_params = secgen_functions::get_parameters($::base64_inputs_file)
   $remove_history = str2bool($secgen_params['remove_history'][0])
   $root_password = $secgen_params['root_password'][0]
   $clobber_file_times = str2bool($secgen_params['clobber_file_times'][0])
@@ -13,6 +12,15 @@ class cleanup::init {
     shell      => '/bin/bash',
     password   => pw_hash($root_password, 'SHA-512', 'mysalt'),
     managehome => true,
+  }
+
+  # if kali_msf we have a default kali sudoer account by default, so change the kali user password too.
+  if $operatingsystemrelease == 'kali-rolling' and $root_password {
+    ::accounts::user { 'kali':
+      shell      => '/bin/bash',
+      password   => pw_hash($root_password, 'SHA-512', 'mysalt'),
+      managehome => true,
+    }
   }
 
   # Disable ssh
